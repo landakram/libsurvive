@@ -265,7 +265,7 @@ cleanup:
 		for (const struct Endpoint_t *endpoint = packet->usbInfo->device_info->endpoints; endpoint->name; endpoint++) {
 			int errorCode =
 				AttachInterface(packet->sv, packet->usbInfo, endpoint, packet->usbInfo->handle, survive_data_cb);
-			if (errorCode < 0) {
+			if (errorCode != 0) {
 				SV_WARN("Could not attach interface %s: %d", endpoint->name, errorCode);
 			}
 		}
