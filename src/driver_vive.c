@@ -718,7 +718,7 @@ static int AttachInterface(SurviveViveData *sv, struct SurviveUSBInfo *usbObject
 
 	if (!iface->transfer) {
 		SV_ERROR(SURVIVE_ERROR_HARWARE_FAULT, "Error: failed on libusb_alloc_transfer for %s", hname);
-		return -4;
+		return 4;
 	}
 	memset(iface->swap_buffer, 0xCA, sizeof(iface->swap_buffer));
 	libusb_fill_interrupt_transfer(tx, devh, endpoint_num, iface->swap_buffer[0], INTBUFFSIZE, handle_transfer, iface,
@@ -736,7 +736,7 @@ static int AttachInterface(SurviveViveData *sv, struct SurviveUSBInfo *usbObject
 		usbObject->active_transfers--;
 		survive_usb_transfer_free(iface->transfer);
 		iface->transfer = 0;
-		return -6;
+		return 6;
 	}
 #endif
 	return 0;
