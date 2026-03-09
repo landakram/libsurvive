@@ -220,6 +220,10 @@ static void handle_transfer(struct libusb_transfer *transfer) {
                     transfer->status);
             goto object_turned_off;
         } else {
+            // Timeout is non-fatal until we cross the turned-off threshold; keep polling this endpoint.
+            if (libusb_submit_transfer(transfer)) {
+                goto shutdown;
+            }
             return;
         }
 	}
