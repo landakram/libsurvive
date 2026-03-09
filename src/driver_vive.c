@@ -3254,6 +3254,8 @@ void survive_data_cb_locked(uint64_t time_received_us, SurviveUSBInterface *si) 
 
 int survive_vive_close(SurviveContext *ctx, void *driver) {
 	SurviveViveData *sv = driver;
+	uint64_t close_started_ms = OGGetAbsoluteTimeMS();
+	uint64_t last_progress_ms = close_started_ms;
 #ifndef HIDAPI
 	libusb_hotplug_deregister_callback(sv->usbctx, sv->callback_handle);
 #endif
@@ -3261,15 +3263,30 @@ int survive_vive_close(SurviveContext *ctx, void *driver) {
 		survive_close_usb_device(sv->udev[i]);
 	}
 	while (sv->udev_cnt) {
+		size_t prev_udev_cnt = sv->udev_cnt;
 #ifndef HIDAPI
+		struct timeval tv = {.tv_usec = 10 * 1000};
 		survive_release_ctx_lock(ctx);
-		libusb_handle_events(sv->usbctx);
+		int r = libusb_handle_events_timeout(sv->usbctx, &tv);
 		survive_get_ctx_lock(ctx);
+		if (r && r != LIBUSB_ERROR_INTERRUPTED) {
+			SV_WARN("libusb close-poll failed: %d (%s)", r, libusb_error_name(r));
+		}
 #endif
 		for (int i = 0; i < sv->udev_cnt; i++) {
 			struct SurviveUSBInfo *usbInfo = sv->udev[i];
 			if (survive_handle_close_request_flag(usbInfo)) {
 				i--;
+			}
+		}
+		if (sv->udev_cnt != prev_udev_cnt) {
+			last_progress_ms = OGGetAbsoluteTimeMS();
+		} else {
+			uint64_t now_ms = OGGetAbsoluteTimeMS();
+			if (now_ms - last_progress_ms > 1000) {
+				SV_WARN("still waiting for %zu USB device(s) to close after %llums", sv->udev_cnt,
+						(unsigned long long)(now_ms - close_started_ms));
+				last_progress_ms = now_ms;
 			}
 		}
 	}
