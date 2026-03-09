@@ -319,6 +319,8 @@ static inline void survive_close_usb_device(struct SurviveUSBInfo *usbInfo) {
 		usbInfo->request_close = true;
 		SV_VERBOSE(100, "Acking close for %s", survive_colorize_codename(usbInfo->so));
 	}
+	SV_WARN("close requested for %s (%s): active_transfers=%d interface_cnt=%zu", survive_colorize_codename(usbInfo->so),
+			survive_colorize(usbInfo->device_info->name), usbInfo->active_transfers, usbInfo->interface_cnt);
 
 	SV_VERBOSE(100, "Closing device on %s %p (%p)", survive_colorize_codename(usbInfo->so), cfg, usbInfo);
 
@@ -327,8 +329,13 @@ static inline void survive_close_usb_device(struct SurviveUSBInfo *usbInfo) {
 		SV_VERBOSE(100, "Cleaning up interface on %d %s %s (%p)", iface->which_interface_am_i,
 				   survive_colorize_codename(iface->usbInfo->so), survive_colorize(iface->hname),
 				   usbInfo->interfaces[j].transfer);
-		if (usbInfo->interfaces[j].transfer)
-			libusb_cancel_transfer(usbInfo->interfaces[j].transfer);
+		if (usbInfo->interfaces[j].transfer) {
+			int rc = libusb_cancel_transfer(usbInfo->interfaces[j].transfer);
+			if (rc && rc != LIBUSB_ERROR_NOT_FOUND) {
+				SV_WARN("libusb_cancel_transfer failed on iface %d for %s: %d (%s)", iface->which_interface_am_i,
+						survive_colorize_codename(usbInfo->so), rc, libusb_error_name(rc));
+			}
+		}
 	}
 }
 
