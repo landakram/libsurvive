@@ -3257,8 +3257,6 @@ void survive_data_cb_locked(uint64_t time_received_us, SurviveUSBInterface *si) 
 
 int survive_vive_close(SurviveContext *ctx, void *driver) {
 	SurviveViveData *sv = driver;
-	uint64_t close_started_ms = OGGetAbsoluteTimeMS();
-	uint64_t last_progress_ms = close_started_ms;
 #ifndef HIDAPI
 	libusb_hotplug_deregister_callback(sv->usbctx, sv->callback_handle);
 #endif
@@ -3266,7 +3264,6 @@ int survive_vive_close(SurviveContext *ctx, void *driver) {
 		survive_close_usb_device(sv->udev[i]);
 	}
 	while (sv->udev_cnt) {
-		size_t prev_udev_cnt = sv->udev_cnt;
 #ifndef HIDAPI
 		struct timeval tv = {.tv_usec = 10 * 1000};
 		survive_release_ctx_lock(ctx);
@@ -3280,47 +3277,6 @@ int survive_vive_close(SurviveContext *ctx, void *driver) {
 			struct SurviveUSBInfo *usbInfo = sv->udev[i];
 			if (survive_handle_close_request_flag(usbInfo)) {
 				i--;
-			}
-		}
-		if (sv->udev_cnt != prev_udev_cnt) {
-			last_progress_ms = OGGetAbsoluteTimeMS();
-		} else {
-			uint64_t now_ms = OGGetAbsoluteTimeMS();
-			if (now_ms - last_progress_ms > 1000) {
-				SV_WARN("still waiting for %zu USB device(s) to close after %llums", sv->udev_cnt,
-						(unsigned long long)(now_ms - close_started_ms));
-				fprintf(stderr, "[libsurvive-close] waiting udev_cnt=%zu elapsed_ms=%llu\n", sv->udev_cnt,
-						(unsigned long long)(now_ms - close_started_ms));
-				fflush(stderr);
-				for (size_t i = 0; i < sv->udev_cnt; i++) {
-					struct SurviveUSBInfo *usbInfo = sv->udev[i];
-					size_t interfaces_with_transfer = 0;
-					for (size_t j = 0; j < usbInfo->interface_cnt; j++) {
-						if (usbInfo->interfaces[j].transfer) {
-							interfaces_with_transfer++;
-						}
-					}
-					SV_WARN("close wait device[%zu] %s (%s): active_transfers=%zu request_close=%d iface_transfers=%zu",
-							i, survive_colorize_codename(usbInfo->so), survive_colorize(usbInfo->device_info->name),
-							(size_t)usbInfo->active_transfers, usbInfo->request_close, interfaces_with_transfer);
-					fprintf(stderr,
-							"[libsurvive-close] device[%zu] codename=%s type=%s active_transfers=%zu request_close=%d iface_transfers=%zu\n",
-							i, survive_colorize_codename(usbInfo->so), usbInfo->device_info->name,
-							(size_t)usbInfo->active_transfers, usbInfo->request_close, interfaces_with_transfer);
-					fflush(stderr);
-					for (size_t j = 0; j < usbInfo->interface_cnt; j++) {
-						SurviveUSBInterface *iface = &usbInfo->interfaces[j];
-						if (!iface->transfer) {
-							continue;
-						}
-						fprintf(stderr,
-								"[libsurvive-close] device[%zu] iface=%d shutdown=%d status=%d timeout=%u endpoint=0x%02x\n",
-								i, iface->which_interface_am_i, iface->shutdown, (int)iface->transfer->status,
-								iface->transfer->timeout, iface->transfer->endpoint);
-						fflush(stderr);
-					}
-				}
-				last_progress_ms = now_ms;
 			}
 		}
 	}
