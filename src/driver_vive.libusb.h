@@ -213,18 +213,24 @@ static void handle_transfer(struct libusb_transfer *transfer) {
 	SurviveUSBInterface *iface = transfer->user_data;
 	SurviveContext *ctx = iface->ctx;
 	if (!iface->shutdown && transfer->status == LIBUSB_TRANSFER_TIMED_OUT) {
-        iface->consecutive_timeouts++;
-        if(iface->consecutive_timeouts >= 3) {
-            SV_WARN("%f %s Device turned off: %d", survive_run_time(ctx), survive_colorize_codename(iface->assoc_obj),
-                    transfer->status);
-            goto object_turned_off;
-        } else {
-            // Timeout is non-fatal until we cross the turned-off threshold; keep polling this endpoint.
-            if (libusb_submit_transfer(transfer)) {
-                goto shutdown;
-            }
-            return;
-        }
+		bool timeout_indicates_disconnect = iface->which_interface_am_i != USB_IF_HMD_BUTTONS &&
+											iface->which_interface_am_i != USB_IF_TRACKER0_BUTTONS &&
+											iface->which_interface_am_i != USB_IF_TRACKER1_BUTTONS &&
+											iface->which_interface_am_i != USB_IF_W_WATCHMAN1_BUTTONS;
+		if (timeout_indicates_disconnect) {
+			iface->consecutive_timeouts++;
+			if (iface->consecutive_timeouts >= 3) {
+				SV_WARN("%f %s Device turned off: %d", survive_run_time(ctx),
+						survive_colorize_codename(iface->assoc_obj), transfer->status);
+				goto object_turned_off;
+			}
+		}
+
+		// Timeout is non-fatal until we cross the turned-off threshold; keep polling this endpoint.
+		if (libusb_submit_transfer(transfer)) {
+			goto shutdown;
+		}
+		return;
 	}
 
 	if (!iface->shutdown && transfer->status != LIBUSB_TRANSFER_COMPLETED) {
