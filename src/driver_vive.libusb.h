@@ -335,11 +335,16 @@ static inline void survive_close_usb_device(struct SurviveUSBInfo *usbInfo) {
 				   usbInfo->interfaces[j].transfer);
 		if (usbInfo->interfaces[j].transfer) {
 			int rc = libusb_cancel_transfer(usbInfo->interfaces[j].transfer);
+			fprintf(stderr, "[libsurvive-close] cancel_transfer iface=%d codename=%s rc=%d status=%d\n",
+					iface->which_interface_am_i, survive_colorize_codename(usbInfo->so), rc,
+					(int)usbInfo->interfaces[j].transfer->status);
+			fflush(stderr);
 			if (rc && rc != LIBUSB_ERROR_NOT_FOUND) {
 				SV_WARN("libusb_cancel_transfer failed on iface %d for %s: %d (%s)", iface->which_interface_am_i,
 						survive_colorize_codename(usbInfo->so), rc, libusb_error_name(rc));
-				fprintf(stderr, "[libsurvive-close] cancel_transfer iface=%d codename=%s rc=%d (%s)\n",
-						iface->which_interface_am_i, survive_colorize_codename(usbInfo->so), rc, libusb_error_name(rc));
+				fprintf(stderr, "[libsurvive-close] cancel_transfer_error iface=%d codename=%s rc=%d (%s)\n",
+						iface->which_interface_am_i, survive_colorize_codename(usbInfo->so), rc,
+						libusb_error_name(rc));
 				fflush(stderr);
 			}
 		}

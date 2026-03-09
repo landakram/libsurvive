@@ -3308,6 +3308,17 @@ int survive_vive_close(SurviveContext *ctx, void *driver) {
 							i, survive_colorize_codename(usbInfo->so), usbInfo->device_info->name,
 							(size_t)usbInfo->active_transfers, usbInfo->request_close, interfaces_with_transfer);
 					fflush(stderr);
+					for (size_t j = 0; j < usbInfo->interface_cnt; j++) {
+						SurviveUSBInterface *iface = &usbInfo->interfaces[j];
+						if (!iface->transfer) {
+							continue;
+						}
+						fprintf(stderr,
+								"[libsurvive-close] device[%zu] iface=%d shutdown=%d status=%d timeout=%u endpoint=0x%02x\n",
+								i, iface->which_interface_am_i, iface->shutdown, (int)iface->transfer->status,
+								iface->transfer->timeout, iface->transfer->endpoint);
+						fflush(stderr);
+					}
 				}
 				last_progress_ms = now_ms;
 			}
