@@ -30,6 +30,11 @@ static void ootx_error_clbk_d(ootx_decoder_context *ct, const char *msg) {
 }
 
 STATIC_CONFIG_ITEM(SERIALIZE_OOTX, "serialize-ootx", 'b', "Serialize out ootx", 0)
+static inline bool should_ignore_ootx_remap(SurviveContext *ctx, BaseStationData *b, uint32_t incoming_id) {
+	return survive_configi(ctx, "lock-known-lighthouses", SC_GET, 0) != 0 && b->BaseStationID != 0 &&
+		   b->BaseStationID != incoming_id;
+}
+
 static void ootx_packet_clbk_d_gen2(ootx_decoder_context *ct, ootx_packet *packet) {
 	SurviveContext *ctx = ((SurviveObject *)(ct->user))->ctx;
 	int id = ct->user1;
@@ -49,6 +54,12 @@ static void ootx_packet_clbk_d_gen2(ootx_decoder_context *ct, ootx_packet *packe
 	b->OOTXChecked |= true;
 	FLT accel[3] = {v15.accel_dir[0], v15.accel_dir[1], v15.accel_dir[2]};
 	bool upChanged = norm3d(b->accel) != 0.0 && dist3d(b->accel, accel) > 1e-3;
+
+	if (should_ignore_ootx_remap(ctx, b, v15.id)) {
+		SV_WARN("Ignoring OOTX packet on channel %d from %08x; expected %08x", ctx->bsd[id].mode, (unsigned)v15.id,
+				(unsigned)b->BaseStationID);
+		return;
+	}
 
 	if (upChanged) {
 		SV_VERBOSE(10, "OOTX up direction changed for %x (%f)", b->BaseStationID, norm3d(b->accel));
@@ -96,6 +107,12 @@ static void ootx_packet_cblk_d_gen1(ootx_decoder_context *ct, ootx_packet *packe
 	b->OOTXChecked = true;
 	FLT accel[3] = {v6.accel_dir_x, v6.accel_dir_y, v6.accel_dir_z};
 	bool upChanged = norm3d(b->accel) != 0.0 && dist3d(b->accel, accel) > 1e-3;
+
+	if (should_ignore_ootx_remap(ctx, b, v6.id)) {
+		SV_WARN("Ignoring OOTX packet on channel %d from %08x; expected %08x", ctx->bsd[id].mode, (unsigned)v6.id,
+				(unsigned)b->BaseStationID);
+		return;
+	}
 
 	bool doSave = b->BaseStationID != v6.id || b->OOTXSet == false || upChanged || b->mode != v6.mode_current;
 	b->sys_unlock_count = v6.sys_unlock_count;
@@ -191,7 +208,10 @@ SURVIVE_EXPORT void survive_default_sync_process(SurviveObject *so, survive_chan
 												 bool ootx, bool gen) {
 	struct SurviveContext *ctx = so->ctx;
 	int8_t bsd_idx = survive_get_bsd_idx(ctx, channel);
-	if (bsd_idx == -1) {
+	if (bsd_idx == SURVIVE_BSD_IDX_IGNORED) {
+		return;
+	}
+	if (bsd_idx == SURVIVE_BSD_IDX_INVALID) {
 		SV_WARN("Invalid channel requested(%d) for %s", channel, so->codename)
 		return;
 	}
@@ -320,7 +340,10 @@ SURVIVE_EXPORT void survive_default_sweep_process(SurviveObject *so, survive_cha
 	struct SurviveContext *ctx = so->ctx;
 
 	int8_t bsd_idx = survive_get_bsd_idx(ctx, channel);
-	if (bsd_idx == -1) {
+	if (bsd_idx == SURVIVE_BSD_IDX_IGNORED) {
+		return;
+	}
+	if (bsd_idx == SURVIVE_BSD_IDX_INVALID) {
 		SV_WARN("Invalid channel requested(%d) for %s", channel, so->codename)
 		return;
 	}
@@ -386,7 +409,10 @@ SURVIVE_EXPORT void survive_default_sweep_angle_process(SurviveObject *so, survi
 														survive_timecode timecode, int8_t plane, FLT angle) {
 	struct SurviveContext *ctx = so->ctx;
 	int8_t bsd_idx = survive_get_bsd_idx(ctx, channel);
-	if (bsd_idx == -1) {
+	if (bsd_idx == SURVIVE_BSD_IDX_IGNORED) {
+		return;
+	}
+	if (bsd_idx == SURVIVE_BSD_IDX_INVALID) {
 		SV_WARN("Invalid channel requested(%d) for %s", channel, so->codename)
 		return;
 	}

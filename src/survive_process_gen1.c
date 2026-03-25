@@ -13,7 +13,15 @@ void survive_ootx_behavior(SurviveObject *so, int8_t bsd_idx, int8_t lh_version,
 
 void survive_default_light_process(SurviveObject *so, int sensor_id, int acode, int timeinsweep, uint32_t timecode,
 								   uint32_t length, uint32_t lh) {
+	uint32_t raw_lh = lh;
 	lh = survive_get_bsd_idx(so->ctx, lh);
+	if (lh == SURVIVE_BSD_IDX_IGNORED) {
+		return;
+	}
+	if (lh == SURVIVE_BSD_IDX_INVALID) {
+		SV_WARN("Invalid lighthouse requested(%u) for %s", raw_lh, so->codename);
+		return;
+	}
 
 	if (so->ctx->bsd[lh].disable)
 		return;
