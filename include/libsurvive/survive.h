@@ -523,6 +523,9 @@ SURVIVE_EXPORT void survive_attach_configb(SurviveContext *ctx, const char *tag,
 #endif
 SURVIVE_EXPORT void survive_detach_config(SurviveContext *ctx, const char *tag, void * var );
 
+#define SURVIVE_BSD_IDX_INVALID ((int8_t)-1)
+#define SURVIVE_BSD_IDX_IGNORED ((int8_t)-2)
+
 SURVIVE_EXPORT int8_t survive_get_bsd_idx(SurviveContext *ctx, survive_channel channel);
 
 #define SURVIVE_INVOKE_HOOK(hook, ctx, ...)                                                                            \

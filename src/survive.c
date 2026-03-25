@@ -41,6 +41,8 @@ STATIC_CONFIG_ITEM(CONFIG_F_OOTX, "force-ootx", 'b', "Forces ootx capture even i
 STATIC_CONFIG_ITEM(CONFIG_LIGHTHOUSE_COUNT, "lighthousecount", 'i', "How many lighthouses to look for.", 0)
 STATIC_CONFIG_ITEM(LIGHTHOUSE_GEN, "lighthouse-gen", 'i',
 				   "Which lighthouse gen to use -- 1 for LH1, 2 for LH2, 0 (default) for auto-detect", 0)
+STATIC_CONFIG_ITEM(LOCK_KNOWN_LIGHTHOUSES, "lock-known-lighthouses", 'b',
+				   "Ignore lighthouse channels and OOTX remaps that are not already present in config.", 0)
 STATIC_CONFIG_ITEM(OUTPUT_CALLBACK_STATS, "output-callback-stats", 'f',
 				   "Print cb stats every given number of seconds. 0 disables this output.", 0.);
 STATIC_CONFIG_ITEM(THREADED_POSERS, "threaded-posers", 'b', "Whether or not to run each poser in their own thread.", 1)
@@ -224,11 +226,16 @@ static void PrintMatchingDrivers( const char * prefix, const char * matchingpara
 
 SURVIVE_EXPORT int8_t survive_get_bsd_idx(SurviveContext *ctx, survive_channel channel) {
 	if (channel < 0 || channel >= 16) {
-		return -1;
+		return SURVIVE_BSD_IDX_INVALID;
 	}
+
+	bool lock_known_lighthouses = survive_configi(ctx, LOCK_KNOWN_LIGHTHOUSES_TAG, SC_GET, 0) != 0;
 
 	if (ctx->lh_version == 0) {
 		if (ctx->bsd[channel].mode == 0xFF) {
+			if (lock_known_lighthouses) {
+				return SURVIVE_BSD_IDX_IGNORED;
+			}
 			ctx->bsd[channel] = (BaseStationData){.tracker = ctx->bsd[channel].tracker};
 			ctx->bsd[channel].mode = channel;
 			ctx->activeLighthouses++;
@@ -240,6 +247,10 @@ SURVIVE_EXPORT int8_t survive_get_bsd_idx(SurviveContext *ctx, survive_channel c
 	int8_t i = ctx->bsd_map[channel];
 	if (i != -1)
 		return i;
+
+	if (lock_known_lighthouses) {
+		return SURVIVE_BSD_IDX_IGNORED;
+	}
 
 	for (i = 0; i < NUM_GEN2_LIGHTHOUSES; i++) {
 		if (ctx->bsd[i].mode == 0xFF) {
