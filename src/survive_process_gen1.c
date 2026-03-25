@@ -13,8 +13,9 @@ void survive_ootx_behavior(SurviveObject *so, int8_t bsd_idx, int8_t lh_version,
 
 void survive_default_light_process(SurviveObject *so, int sensor_id, int acode, int timeinsweep, uint32_t timecode,
 								   uint32_t length, uint32_t lh) {
+	struct SurviveContext *ctx = so->ctx;
 	uint32_t raw_lh = lh;
-	lh = survive_get_bsd_idx(so->ctx, lh);
+	lh = survive_get_bsd_idx(ctx, lh);
 	if (lh == SURVIVE_BSD_IDX_IGNORED) {
 		return;
 	}
@@ -28,7 +29,6 @@ void survive_default_light_process(SurviveObject *so, int sensor_id, int acode, 
 
 	survive_notify_gen1(so, "Lightcap called");
 
-	SurviveContext *ctx = so->ctx;
 	int base_station = lh;
 
 	if (sensor_id == -1 || sensor_id == -2) {
