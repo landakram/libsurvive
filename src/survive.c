@@ -18,6 +18,7 @@
 #include "survive_kalman_lighthouses.h"
 #include "survive_recording.h"
 
+#include <errno.h>
 #include <stdarg.h>
 
 #ifdef _WIN32
@@ -41,6 +42,9 @@ STATIC_CONFIG_ITEM(CONFIG_F_OOTX, "force-ootx", 'b', "Forces ootx capture even i
 STATIC_CONFIG_ITEM(CONFIG_LIGHTHOUSE_COUNT, "lighthousecount", 'i', "How many lighthouses to look for.", 0)
 STATIC_CONFIG_ITEM(LIGHTHOUSE_GEN, "lighthouse-gen", 'i',
 				   "Which lighthouse gen to use -- 1 for LH1, 2 for LH2, 0 (default) for auto-detect", 0)
+STATIC_CONFIG_ITEM(ALLOWED_LIGHTHOUSE_CHANNELS, "allowed-lighthouse-channels", 's',
+				   "Comma-separated lighthouse channels to accept (for example 0,1,2,3). Empty accepts all channels.",
+				   "")
 STATIC_CONFIG_ITEM(LOCK_KNOWN_LIGHTHOUSES, "lock-known-lighthouses", 'b',
 				   "Ignore lighthouse channels and OOTX remaps that are not already present in config.", 0)
 STATIC_CONFIG_ITEM(OUTPUT_CALLBACK_STATS, "output-callback-stats", 'f',
@@ -229,6 +233,19 @@ SURVIVE_EXPORT int8_t survive_get_bsd_idx(SurviveContext *ctx, survive_channel c
 		return SURVIVE_BSD_IDX_INVALID;
 	}
 
+	struct SurviveContext_private *pctx = ctx->private_members;
+	if (pctx->allowed_lighthouse_channels_configured) {
+		uint16_t bit = (uint16_t)(1u << channel);
+		if ((pctx->allowed_lighthouse_channels_mask & bit) == 0) {
+			if ((pctx->warned_disallowed_channels_mask & bit) == 0) {
+				pctx->warned_disallowed_channels_mask |= bit;
+				SV_WARN("Ignoring lighthouse channel %d because it is not in allowed-lighthouse-channels=%s", channel,
+						survive_configs(ctx, ALLOWED_LIGHTHOUSE_CHANNELS_TAG, SC_GET, ""));
+			}
+			return SURVIVE_BSD_IDX_IGNORED;
+		}
+	}
+
 	bool lock_known_lighthouses = survive_configi(ctx, LOCK_KNOWN_LIGHTHOUSES_TAG, SC_GET, 0) != 0;
 
 	if (ctx->lh_version == 0) {
@@ -265,6 +282,63 @@ SURVIVE_EXPORT int8_t survive_get_bsd_idx(SurviveContext *ctx, survive_channel c
 	}
 
 	return -1;
+}
+
+static void configure_allowed_lighthouse_channels(SurviveContext *ctx) {
+	struct SurviveContext_private *pctx = ctx->private_members;
+	const char *raw = survive_configs(ctx, ALLOWED_LIGHTHOUSE_CHANNELS_TAG, SC_GET, "");
+	pctx->allowed_lighthouse_channels_mask = 0;
+	pctx->warned_disallowed_channels_mask = 0;
+	pctx->allowed_lighthouse_channels_configured = false;
+
+	if (raw == 0 || raw[0] == 0) {
+		return;
+	}
+
+	char *copy = strdup(raw);
+	if (copy == 0) {
+		SV_WARN("Failed to allocate allowed-lighthouse-channels parser state; ignoring channel filter");
+		return;
+	}
+
+	uint16_t mask = 0;
+	bool saw_channel = false;
+	bool valid = true;
+	char *saveptr = 0;
+	for (char *token = strtok_r(copy, ",", &saveptr); token != 0; token = strtok_r(0, ",", &saveptr)) {
+		while (isspace((unsigned char)*token)) {
+			token++;
+		}
+		char *end = token + strlen(token);
+		while (end > token && isspace((unsigned char)end[-1])) {
+			*--end = 0;
+		}
+		if (*token == 0) {
+			valid = false;
+			break;
+		}
+
+		errno = 0;
+		char *parse_end = 0;
+		long channel = strtol(token, &parse_end, 10);
+		if (errno != 0 || parse_end == token || *parse_end != 0 || channel < 0 || channel >= 16) {
+			valid = false;
+			break;
+		}
+		mask |= (uint16_t)(1u << channel);
+		saw_channel = true;
+	}
+
+	free(copy);
+
+	if (!valid || !saw_channel) {
+		SV_WARN("Ignoring invalid allowed-lighthouse-channels value '%s'", raw);
+		return;
+	}
+
+	pctx->allowed_lighthouse_channels_mask = mask;
+	pctx->allowed_lighthouse_channels_configured = true;
+	SV_INFO("Allowing lighthouse channels %s (mask=0x%04x)", raw, (unsigned)mask);
 }
 
 void survive_get_ctx_lock(SurviveContext *ctx) {
@@ -496,6 +570,7 @@ SurviveContext *survive_init_internal(int argc, char *const *argv, void *userDat
 		SV_VERBOSE(100, "\t'%s'",argv[i]);
 	}
 	survive_process_env(ctx, true);
+	configure_allowed_lighthouse_channels(ctx);
 
 	const char *record_config_prefix_fields[] = {"record", "usbmon-record", 0};
 	if (!user_set_configfile && find_correct_config_file(ctx, record_config_prefix_fields)) {
