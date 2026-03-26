@@ -1,5 +1,8 @@
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+
 struct SurviveExternalPose {
 	char name[32];
 	SurvivePose pose;
@@ -16,4 +19,7 @@ struct SurviveContext_private {
 
 	struct SurviveExternalPose ExternalPoses[16];
 	SurvivePose external2world;
+	uint16_t allowed_lighthouse_channels_mask;
+	uint16_t warned_disallowed_channels_mask;
+	bool allowed_lighthouse_channels_configured;
 };
