@@ -822,7 +822,7 @@ bool solve_global_scene(struct SurviveContext *ctx, MPFITData *d, PoserDataGloba
 	survive_optimizer_setup_cameras(&mpfitctx, ctx, false, useJacobians, true); // d->use_jacobian_function_obj);
 	size_t lh_meas[NUM_GEN2_LIGHTHOUSES][2] = {0};
 
-	struct variance_measure lh_meas_variance[NUM_GEN2_LIGHTHOUSES] = {0};
+	struct variance_measure lh_meas_variance[NUM_GEN2_LIGHTHOUSES][2] = {0};
 
 	for (int i = 0; i < scenes_cnt; i++) {
 		meas_cnt += gss->scenes[i].meas_cnt;
@@ -852,7 +852,7 @@ bool solve_global_scene(struct SurviveContext *ctx, MPFITData *d, PoserDataGloba
 			meas->light.sensor_idx = gss->scenes[i].meas[j].sensor_idx;
 			meas->invalid = false;
 
-			variance_measure_add(&lh_meas_variance[meas->light.lh * 2 + meas->light.axis], &meas->light.value);
+			variance_measure_add(&lh_meas_variance[meas->light.lh][meas->light.axis], &meas->light.value);
 			meas++;
 		}
 	}
@@ -1013,8 +1013,8 @@ bool solve_global_scene(struct SurviveContext *ctx, MPFITData *d, PoserDataGloba
 				SV_INFO("Global solve with %d scenes for %d with error of %f/%10.10f (acc err %5.4f)", (int)scenes_cnt,
 						i, result.orignorm, result.bestnorm, fabs(err[2] - 1));
 				FLT v1 = 0, v2 = 0;
-				variance_measure_calc(&lh_meas_variance[i * 2], &v1);
-				variance_measure_calc(&lh_meas_variance[i * 2 + 1], &v2);
+				variance_measure_calc(&lh_meas_variance[i][0], &v1);
+				variance_measure_calc(&lh_meas_variance[i][1], &v2);
 			}
 		}
 
