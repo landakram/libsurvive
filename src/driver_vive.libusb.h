@@ -237,11 +237,11 @@ static void handle_transfer(struct libusb_transfer *transfer) {
 	if (!iface->shutdown && transfer->status != LIBUSB_TRANSFER_COMPLETED) {
 		SV_WARN("%f %s Device disconnect: %d", survive_run_time(ctx), survive_colorize_codename(iface->assoc_obj),
 				transfer->status);
-		iface->error_count++;
 		if (iface->error_count++ < 10) {
 			if (libusb_submit_transfer(transfer)) {
 				goto shutdown;
 			}
+			return;
 		}
 
 		goto disconnect;
