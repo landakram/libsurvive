@@ -35,6 +35,18 @@ static inline bool should_ignore_ootx_remap(SurviveContext *ctx, BaseStationData
 		   b->BaseStationID != incoming_id;
 }
 
+static inline bool ootx_up_direction_changed(SurviveContext *ctx, BaseStationData *b, uint32_t incoming_id,
+										 const FLT *accel) {
+	bool changed = norm3d(b->accel) != 0.0 && dist3d(b->accel, accel) > 1e-3;
+	if (changed && b->PositionSet && b->BaseStationID == incoming_id &&
+		survive_configi(ctx, "disable-calibrate", SC_GET, 0) != 0) {
+		SV_VERBOSE(10, "Ignoring OOTX accelerometer change for %08x because calibration is disabled",
+				   (unsigned)incoming_id);
+		return false;
+	}
+	return changed;
+}
+
 static void ootx_packet_clbk_d_gen2(ootx_decoder_context *ct, ootx_packet *packet) {
 	SurviveContext *ctx = ((SurviveObject *)(ct->user))->ctx;
 	int id = ct->user1;
@@ -53,13 +65,14 @@ static void ootx_packet_clbk_d_gen2(ootx_decoder_context *ct, ootx_packet *packe
 	BaseStationData *b = &ctx->bsd[id];
 	b->OOTXChecked |= true;
 	FLT accel[3] = {v15.accel_dir[0], v15.accel_dir[1], v15.accel_dir[2]};
-	bool upChanged = norm3d(b->accel) != 0.0 && dist3d(b->accel, accel) > 1e-3;
-
 	if (should_ignore_ootx_remap(ctx, b, v15.id)) {
 		SV_WARN("Ignoring OOTX packet on channel %d from %08x; expected %08x", ctx->bsd[id].mode, (unsigned)v15.id,
 				(unsigned)b->BaseStationID);
 		return;
 	}
+
+	bool upChanged = ootx_up_direction_changed(ctx, b, v15.id, accel);
+	b->sys_unlock_count = v15.sys_unlock_count;
 
 	if (upChanged) {
 		SV_VERBOSE(10, "OOTX up direction changed for %x (%f)", b->BaseStationID, norm3d(b->accel));
@@ -84,8 +97,6 @@ static void ootx_packet_clbk_d_gen2(ootx_decoder_context *ct, ootx_packet *packe
 		for (int i = 0; i < 3; i++) {
 			b->accel[i] = v15.accel_dir[i];
 		}
-		b->sys_unlock_count = v15.sys_unlock_count;
-
 		// Although we know this already....
 		b->mode = v15.mode_current & 0x7F;
 
@@ -106,14 +117,13 @@ static void ootx_packet_cblk_d_gen1(ootx_decoder_context *ct, ootx_packet *packe
 	BaseStationData *b = &ctx->bsd[id];
 	b->OOTXChecked = true;
 	FLT accel[3] = {v6.accel_dir_x, v6.accel_dir_y, v6.accel_dir_z};
-	bool upChanged = norm3d(b->accel) != 0.0 && dist3d(b->accel, accel) > 1e-3;
-
 	if (should_ignore_ootx_remap(ctx, b, v6.id)) {
 		SV_WARN("Ignoring OOTX packet on channel %d from %08x; expected %08x", ctx->bsd[id].mode, (unsigned)v6.id,
 				(unsigned)b->BaseStationID);
 		return;
 	}
 
+	bool upChanged = ootx_up_direction_changed(ctx, b, v6.id, accel);
 	bool doSave = b->BaseStationID != v6.id || b->OOTXSet == false || upChanged || b->mode != v6.mode_current;
 	b->sys_unlock_count = v6.sys_unlock_count;
 	b->OOTXSet = 1;
@@ -466,6 +476,12 @@ SURVIVE_EXPORT void survive_default_gen_detected_process(SurviveObject *so, int 
 
 	SV_INFO("Detected LH gen %d system.", lh_version + 1);
 	if (lh_version != ctx->lh_version_configed && ctx->lh_version_configed != -1) {
+		if (survive_lighthouse_positions_are_locked(ctx)) {
+			SV_ERROR(SURVIVE_ERROR_INVALID_CONFIG,
+					 "Detected lighthouse generation %d but frozen geometry requires generation %d", lh_version + 1,
+					 ctx->lh_version_configed + 1);
+			return;
+		}
 		SV_WARN("Configuration was valid for gen %d; resetting BSD positions and OOTX", ctx->lh_version_configed + 1);
 		for (int i = 0; i < NUM_GEN2_LIGHTHOUSES; i++) {
 			ctx->bsd[i].PositionSet = ctx->bsd[i].OOTXSet = 0;

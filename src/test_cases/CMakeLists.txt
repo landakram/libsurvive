@@ -1,7 +1,7 @@
 SET(SURVIVE_TESTS
         reproject
         check_generated barycentric_svd optimizer
-        rotate_angvel export_config)
+        rotate_angvel export_config lighthouse_lock)
 
 set(barycentric_svd_ADDITIONAL_SRCS ../barycentric_svd/barycentric_svd.c)
 
@@ -51,6 +51,12 @@ IF(NOT WIN32)
         get_filename_component(REC_FILE_NAME ${REC_FILE} NAME)
         add_test(NAME ${REC_FILE_NAME} COMMAND $<TARGET_FILE:test_replays> ${REC_FILE})
     endforeach()
+
+    set(FROZEN_LIGHTHOUSE_REPLAY ${CMAKE_CURRENT_BINARY_DIR}/libsurvive-extras-data/tests/lh2_test_cal.rec.gz)
+    if(EXISTS ${FROZEN_LIGHTHOUSE_REPLAY})
+        add_test(NAME frozen_lighthouse_replay COMMAND $<TARGET_FILE:test_replays> ${FROZEN_LIGHTHOUSE_REPLAY}
+                 --disable-calibrate --lock-known-lighthouses --test-replay-dont-reset-lh)
+    endif()
 ENDIF()
 
 if(PCAP_LIBRARY)

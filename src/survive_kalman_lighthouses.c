@@ -1,4 +1,5 @@
 #include "survive_kalman_lighthouses.h"
+#include "survive_internal.h"
 #include "survive_recording.h"
 #include "survive_reproject.h"
 #include "survive_reproject_gen2.h"
@@ -84,6 +85,9 @@ void integrate_imu(SurviveKalmanLighthouse *tracker) {
 
 void survive_kalman_lighthouse_update_position(SurviveKalmanLighthouse *tracker, const SurvivePose *pose) {
 	if (tracker->updating == false) {
+		if (survive_lighthouse_positions_are_locked(tracker->ctx) && tracker->ctx->bsd[tracker->lh].PositionSet) {
+			pose = &tracker->ctx->bsd[tracker->lh].Pose;
+		}
 		tracker->state.Lighthouse = *(pose);
 
 		SurviveContext *ctx = tracker->ctx;
@@ -112,6 +116,10 @@ void survive_kalman_lighthouse_update_position(SurviveKalmanLighthouse *tracker,
 }
 
 void survive_kalman_lighthouse_report(SurviveKalmanLighthouse *tracker) {
+	if (survive_lighthouse_positions_are_locked(tracker->ctx) && tracker->ctx->bsd[tracker->lh].PositionSet) {
+		tracker->state.Lighthouse = tracker->ctx->bsd[tracker->lh].Pose;
+		tracker->push_state.Lighthouse = tracker->state.Lighthouse;
+	}
 	quatnormalize(tracker->state.Lighthouse.Rot, tracker->state.Lighthouse.Rot);
 	SurvivePose lighthouse2world = survive_kalman_lighthouse_lh2world(tracker);
 	FLT var_diag[3] = {0};
@@ -319,6 +327,12 @@ SURVIVE_EXPORT void survive_kalman_lighthouse_integrate_observation(SurviveKalma
 																	const SurvivePose *pose, const CnMat *Rlh) {
 	if (tracker == 0)
 		return;
+
+	if (survive_lighthouse_positions_are_locked(tracker->ctx) && tracker->ctx->bsd[tracker->lh].PositionSet) {
+		tracker->state.Lighthouse = tracker->ctx->bsd[tracker->lh].Pose;
+		tracker->push_state.Lighthouse = tracker->state.Lighthouse;
+		return;
+	}
 
 	CN_CREATE_STACK_MAT(H, 7, tracker->model.state_cnt);
 	CN_CREATE_STACK_MAT(R, 7, 7);

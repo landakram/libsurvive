@@ -11,6 +11,7 @@
 #include "string.h"
 #include "survive_kalman_lighthouses.h"
 #include "survive_kalman_tracker.h"
+#include "survive_internal.h"
 #include "survive_str.h"
 
 #include "survive_private.h"
@@ -187,6 +188,18 @@ void survive_default_ootx_received_process(struct SurviveContext *ctx, uint8_t b
 
 void survive_default_raw_lighthouse_pose_process(SurviveContext *ctx, uint8_t lighthouse,
 											 const SurvivePose *lighthouse_pose) {
+	if (survive_lighthouse_positions_are_locked(ctx)) {
+		if (!ctx->bsd[lighthouse].PositionSet) {
+			SV_ERROR(SURVIVE_ERROR_INVALID_CONFIG, "Frozen lighthouse %d has no configured position", lighthouse);
+			return;
+		}
+		if (lighthouse_pose == 0 || memcmp(lighthouse_pose, &ctx->bsd[lighthouse].Pose, sizeof(*lighthouse_pose)) != 0) {
+			SV_WARN("Ignoring geometry update for frozen lighthouse %d", lighthouse);
+			return;
+		}
+		lighthouse_pose = &ctx->bsd[lighthouse].Pose;
+	}
+
 	bool notSet = ctx->bsd[lighthouse].PositionSet == 0;
 	if (lighthouse_pose) {
 		for (int i = 0; i < 3; i++)

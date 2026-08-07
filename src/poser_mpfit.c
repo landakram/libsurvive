@@ -366,7 +366,8 @@ static int setup_optimizer(struct async_optimizer_user *user, survive_optimizer 
 	// This just spaces out the controllers; forces an order onto what trys to calibrate what
 	int syncs_required = 200 - so->sensor_ct * 2 - (so->codename[2] - '0') * 10;
 
-	if (bestObjForCal || (d->syncs_seen > syncs_required && objectStationary)) {
+	if (survive_configi(ctx, "disable-calibrate", SC_GET, 0) == 0 &&
+		(bestObjForCal || (d->syncs_seen > syncs_required && objectStationary))) {
 		for (int lh = 0; lh < so->ctx->activeLighthouses; lh++) {
 			if (!so->ctx->bsd[lh].OOTXSet) {
 				// Wait til this thing gets OOTX, and then solve for as much as we can. Avoids doing
