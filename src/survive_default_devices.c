@@ -553,6 +553,13 @@ static void lhdb_tag_value(struct json_callbacks *cb, struct json_stack_entry_s 
 }
 
 SURVIVE_EXPORT int survive_load_steamvr_lighthousedb(SurviveContext *ctx, char *ct0conf, int len) {
+	if (ctx == 0) {
+		return -1;
+	}
+	if (survive_lighthouse_positions_are_locked(ctx)) {
+		SV_ERROR(SURVIVE_ERROR_INVALID_CONFIG, "Frozen lighthouse geometry cannot be replaced with SteamVR calibration");
+		return -1;
+	}
 	if (len == 0)
 		return -1;
 

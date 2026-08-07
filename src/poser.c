@@ -2,6 +2,7 @@
 #include "math.h"
 #include "survive_kalman_lighthouses.h"
 #include "survive_kalman_tracker.h"
+#include "survive_internal.h"
 #include <assert.h>
 #include <linmath.h>
 #include <stdint.h>
@@ -390,8 +391,12 @@ FLT survive_lighthouse_adjust_confidence(SurviveContext *ctx, uint8_t bsd_idx, F
 	ctx->bsd[bsd_idx].confidence += v;
 
 	if (ctx->bsd[bsd_idx].confidence < 0) {
-		ctx->bsd[bsd_idx].PositionSet = 0;
-		SV_WARN("Position for LH%d seems bad; queuing for recal", bsd_idx);
+		if (ctx->bsd[bsd_idx].PositionSet && survive_lighthouse_positions_are_locked(ctx)) {
+			SV_WARN("Position confidence for frozen LH%d seems bad; retaining its configured pose", bsd_idx);
+		} else {
+			ctx->bsd[bsd_idx].PositionSet = 0;
+			SV_WARN("Position for LH%d seems bad; queuing for recal", bsd_idx);
+		}
 	} else if (ctx->bsd[bsd_idx].confidence > 1.) {
 		return ctx->bsd[bsd_idx].confidence = 1;
 	}

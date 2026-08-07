@@ -26,6 +26,10 @@ void survive_load_plugins(const char *additional_plugin_dir);
 typedef double (*survive_run_time_fn)(const SurviveContext *ctx, void *user);
 SURVIVE_EXPORT void survive_install_run_time_fn(SurviveContext *ctx, survive_run_time_fn fn, void *user);
 
-#endif
+static inline bool survive_lighthouse_positions_are_locked(SurviveContext *ctx) {
+	return survive_configi(ctx, "disable-calibrate", SC_GET, 0) != 0 &&
+		   survive_configi(ctx, "lock-known-lighthouses", SC_GET, 0) != 0;
+}
 
+#endif
 

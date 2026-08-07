@@ -1600,7 +1600,7 @@ void survive_kalman_tracker_lost_tracking(SurviveKalmanTracker *tracker, bool al
 		memset(&tracker->so->OutPose, 0, sizeof(SurvivePose));
 	}
 
-	if (!allowLHReset)
+	if (!allowLHReset || survive_lighthouse_positions_are_locked(ctx))
 		return;
 
 	bool objectsAreValid = false;

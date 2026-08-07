@@ -19,6 +19,7 @@
 #include "survive_recording.h"
 
 #include <errno.h>
+#include <math.h>
 #include <stdarg.h>
 
 #ifdef _WIN32
@@ -737,6 +738,44 @@ int survive_startup(SurviveContext *ctx) {
 	// start the thread to process button data
 	ctx->buttonservicethread = OGCreateThread(button_servicer, "Button service", ctx);
 
+	if (survive_lighthouse_positions_are_locked(ctx)) {
+		if (survive_configi(ctx, "force-calibrate", SC_GET, 0) != 0 ||
+			survive_configf(ctx, "random-bsd-noise", SC_GET, -1) > 0) {
+			SV_ERROR(SURVIVE_ERROR_INVALID_CONFIG,
+					 "Frozen lighthouse geometry cannot be combined with calibration or injected pose noise");
+			return ctx->currentError;
+		}
+
+		const char *steamvr_path = survive_configs(ctx, "steamvr-calibration", SC_GET, "");
+		if (steamvr_path != 0 && steamvr_path[0] != 0) {
+			SV_ERROR(SURVIVE_ERROR_INVALID_CONFIG,
+					 "Frozen lighthouse geometry cannot be replaced with SteamVR calibration");
+			return ctx->currentError;
+		}
+
+		if (ctx->activeLighthouses == 0) {
+			SV_ERROR(SURVIVE_ERROR_INVALID_CONFIG, "Frozen lighthouse geometry requires configured lighthouses");
+			return ctx->currentError;
+		}
+
+		for (int i = 0; i < ctx->activeLighthouses; i++) {
+			BaseStationData *bsd = &ctx->bsd[i];
+			if (bsd->disable) {
+				continue;
+			}
+			bool valid_pose = bsd->PositionSet && bsd->BaseStationID != 0 && bsd->mode < NUM_GEN2_LIGHTHOUSES &&
+							  !quatiszero(bsd->Pose.Rot);
+			for (int j = 0; j < 7; j++) {
+				valid_pose &= isfinite(((const FLT *)&bsd->Pose)[j]);
+			}
+			if (!valid_pose) {
+				SV_ERROR(SURVIVE_ERROR_INVALID_CONFIG,
+						 "Frozen lighthouse %d has no valid configured identity, channel, or pose", i);
+				return ctx->currentError;
+			}
+		}
+	}
+
 	PoserCB PreferredPoserCB = (PoserCB)GetDriverByConfig(ctx, "Poser", "poser", "MPFIT");
 	ctx->lightcapproc = GetDriverByConfig(ctx, "Disambiguator", "disambiguator", "StateBased");
 
@@ -965,6 +1004,10 @@ const void *survive_get_driver_by_closefn(const SurviveContext *ctx, DeviceDrive
 }
 
 void survive_reset_lighthouse_position(SurviveContext *ctx, int bsd_idx) {
+	if (ctx->bsd[bsd_idx].PositionSet && survive_lighthouse_positions_are_locked(ctx)) {
+		SV_VERBOSE(10, "Retaining configured geometry for frozen lighthouse %d", bsd_idx);
+		return;
+	}
 	ctx->bsd[bsd_idx].PositionSet = false;
 	ctx->bsd[bsd_idx].variance = (SurviveVelocity){0};
 	survive_kalman_lighthouse_reset(ctx->bsd[bsd_idx].tracker);
@@ -1002,7 +1045,9 @@ SURVIVE_EXPORT const SurvivePose *survive_get_lighthouse_position(const SurviveC
 void survive_reset_lighthouse_positions(SurviveContext *ctx) {
 	// survive_get_ctx_lock(ctx);
 	SV_VERBOSE(100, "survive_reset_lighthouse_positions called");
-	ctx->floor_offset = 0;
+	if (!survive_lighthouse_positions_are_locked(ctx)) {
+		ctx->floor_offset = 0;
+	}
 	for (int i = 0; i < ctx->activeLighthouses; i++) {
 		survive_reset_lighthouse_position(ctx, i);
 	}

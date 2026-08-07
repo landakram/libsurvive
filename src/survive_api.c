@@ -9,6 +9,7 @@
 #include "stdio.h"
 #include "string.h"
 #include "survive.h"
+#include "survive_internal.h"
 
 struct SurviveExternalObject {
 	SurvivePose pose;
@@ -304,7 +305,10 @@ SURVIVE_EXPORT SurviveSimpleContext *survive_simple_init_with_logger(int argc, c
 	actx->poll_mutex = OGCreateMutex();
 	actx->update_cv = OGCreateConditionVariable();
 
-	survive_startup(ctx);
+	if (survive_startup(ctx) != SURVIVE_OK && survive_lighthouse_positions_are_locked(ctx)) {
+		survive_simple_close(actx);
+		return 0;
+	}
 
 	intptr_t i = 0;
 	for (i = 0; i < ctx->activeLighthouses; i++) {
