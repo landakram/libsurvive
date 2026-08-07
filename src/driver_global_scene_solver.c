@@ -146,14 +146,14 @@ static bool run_optimization(global_scene_solver *gss) {
 	if(success) {
 		if(gss->auto_floor) {
 			FLT min_z = gss->ctx->floor_offset;
-			for (int i = 0; i < gss->scenes_cnt; i++) {
+			for (size_t i = 0; i < pgss.scenes_cnt; i++) {
 				min_z = linmath_min(min_z, gss->scenes[i].pose.Pos[2]);
 			}
 			if (isfinite(min_z))
 				survive_set_floor_offset(gss->ctx, min_z);
 		}
 
-		for (int i = 0; i < gss->scenes_cnt; i++) {
+		for (size_t i = 0; i < pgss.scenes_cnt; i++) {
 			SurvivePose p = gss->scenes[i].pose;
 
 			if (!quatiszero(p.Rot)) {
